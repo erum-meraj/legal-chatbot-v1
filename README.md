@@ -1,7 +1,31 @@
-# legal-chatbot-v1
+- ## Legal Chatbot v1
 
-set up venv 
-modules included:
+This repository contains the setup and modules used for a legal chatbot application.
+### Setup
+
+To set up this project, follow these steps: 
+1. **Clone the Repository:** 
+
+```bash
+git clone https://github.com/your/repository.git
+``` 
+2. **Set Up Virtual Environment:** 
+
+```bash
+python -m venv venv
+source venv/bin/activate  # Activate on Unix/Linux
+.\venv\Scripts\activate    # Activate on Windows
+``` 
+3. **Install Requirements:** 
+
+```bash
+pip install -r requirements.txt
+```
+### Modules Included
+
+The following modules are included in this project:
+
+```yaml
 Package                  Version
 ------------------------ ----------
 aiohttp                  3.9.3
@@ -67,3 +91,4 @@ typing-inspect           0.9.0
 urllib3                  2.2.1
 Werkzeug                 3.0.1
 yarl                     1.9.4
+```
