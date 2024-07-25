@@ -1,76 +1,94 @@
 from flask import Flask, render_template, request, jsonify
 import flask_cors 
-# import chat
 import openai
 import sys
 import os
 import re
-from pathlib import Path
-from datetime import datetime
+import langchain
+import json
+import langchain.embeddings
+import langchain_community
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain.chains import ConversationalRetrievalChain
+from langchain_openai import OpenAI
+from langchain_openai import ChatOpenAI
+from langchain_community.llms import Ollama
 
-from langchain.chat_models import ChatOpenAI
-from langchain.schema import (
-    HumanMessage
-)
-model_name = "gpt-3.5-turbo"
-def generate_iso_date():
-    current_date = datetime.now()
-    return re.sub(r"\.\d+$", "", current_date.isoformat().replace(':', '')) 
-class ChatFile:
-    def __init__(self, current_file: Path, model_name: str) -> None:
-        self.current_file = current_file
-        self.model_name = "gpt-3.5-turbo"
-        print(f"Writing to file {current_file}")
-        with open(self.current_file, 'w') as f:
-            f.write(f"Langchain Session at {generate_iso_date()} with {self.model_name}\n\n")
+
+#first run the modelfile to run the final model locally 
+#local product model
+# ollama create prod-model -f chat_model
+ollama_int = Ollama(base_url='http://localhost:11434', model='prod-model')
+
+
+
+default_prompt = """You are a helpful legal Assistant who answers users' questions based on multiple contexts given to you.
+
+    Keep your answer short and to the point.
     
-    def store_to_file(self, question: str, answer: str):
-        print(f"{answer}")
-        with open(self.current_file, 'a') as f:
-            f.write(f"{generate_iso_date()}:\nQ: { question}\nA: {answer}\n\n")
+    The evidence is the context of the PDF extract with metadata. 
+        
+    Reply "Not relevant" if text is irrelevant to the field of legal processes. 
 
-# Create a chat file
-chat_file = ChatFile(Path(f"{model_name}_{generate_iso_date()}.txt"), model_name)
+    give the answer in plain text
+    
+    """
+products = '''product_ID, product_Name, product_Description
+1, gst_service, provide the service to make GST registration forms for enterprises
+2, PAN_service, provide assistance with PAN registration of new enterprises
+3, agreement_drafting, provide assitance with amking different kind of agreements like NDA and intellectual property and other papers'''
 
 
-chat = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
-openai.api_key = "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"
-pre_train = '''pretend to be a chatbot that fullfils the following criteria:
-automate most of the tasks for the Lawyer/CA, 
-will be able to solve user’s basic legal and platform support queries verbally as well as in text format
-also serve as a legal education channel for users where it will provide answers to law related questions(mostly factual based)
-MOreover the lawyer will answer only based on the the questions and should not over-answer.
-'''
-discussion = [ {"role":"system", "content":pre_train}]
+os.environ["OPENAI_API_KEY"] = ""
+loader = PyPDFLoader("chatdata.pdf")
+pages = loader.load_and_split()
+chunks = pages
+embeddings = OpenAIEmbeddings()
+db = FAISS.from_documents(chunks, embeddings)
+chat_model = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.5, verbose=True)
+qa = ConversationalRetrievalChain.from_llm(llm = chat_model, retriever=db.as_retriever())
+
+discussion = []
+
+
+def get_prod_ID():
+    temp_prod = json.dumps(discussion)
+    query = '''product details in CSV form: \n''' + products +  '''\n\nuser's conversation with the assistant:''' + temp_prod + '''\n\nreturn only the product ID'''
+    print(query)
+    response = ollama_int(query)
+    print(response)
+    return response
+
 
 def res(prompt):
-    # discussion.append({"role":"user", "content":prompt})
-    # # print(discussion)
-    # resp = openai.chat.completions.create(
-    #     model= "gpt-3.5-turbo",
-    #     messages=discussion
-    # )
-    # # for chunk in resp:
-    # #     if chunk.choices[0].delta.content is not None:
-    # #         print(chunk.choices[0].delta.content, end="")
-    # result = resp.choices[0].message.content.strip()
-    # # discussion.pop()
-    # discussion.append({"role": "assistant", "content": result})
-    # return result
-
-    resp = chat([HumanMessage(content=prompt)])
-    answer = resp.content
-    chat_file.store_to_file(prompt, answer)
+    result = qa({"question": prompt, "chat_history":discussion, "system": default_prompt})
+    # print(result)
+    discussion.append((prompt, result['answer']))
+    # print(discussion)
+    return result['answer']
+    
 app = Flask(__name__)
 flask_cors.CORS(app)
 
 @app.post("/predict")
 def predict():
     text = request.get_json().get("message")
-    # TODO: check if text is valid
+    # TODO: check if text is valid]
+    prod = "0"
+    if (len(discussion) >= 3):
+        prod = get_prod_ID()
+        print(prod)
+
     response = res(text)
-    message = {"answer": response}
+    message = {"answer": response, "prod_ID": prod}
     return jsonify(message)
+
+@app.post("/transcribe")
+def transcribe():
+    vid = request.get_json().get("message")
+
 
 if __name__ == "__main__":
     app.run()
