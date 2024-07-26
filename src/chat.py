@@ -7,6 +7,7 @@ ollama_int = Ollama(base_url='http://localhost:11434', model='prod-model')
 discussion = []
 products = ""
 
+
 def get_prod_ID():
 
     query = '''prduct details: {}

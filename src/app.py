@@ -66,7 +66,7 @@ def res(prompt):
     result = qa({"question": prompt, "chat_history":discussion, "system": default_prompt})
     # print(result)
     discussion.append((prompt, result['answer']))
-    # print(discussion)
+    print(discussion)
     return result['answer']
     
 app = Flask(__name__)
